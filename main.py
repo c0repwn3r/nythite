@@ -1,27 +1,24 @@
 import base64
-import math
 import os
 import tarfile
-from time import perf_counter, sleep
+from time import perf_counter
 
-import progressbar
-
-from engine.cipher import *
-from engine.files import *
-from engine.hashing import *
-from engine.keys import *
-from utils.formatting import *
-from utils.progress import *
-from utils.tests import *
-from utils.wordlist import *
+from engine.cipher import AESCipher
+from engine.files import get_chunk_size, calculate_keys_needed, read_in_chunks
+from engine.hashing import DIGEST_HEX, hash_file
+from engine.keys import generate_master_key
+from utils.formatting import hrtime, sizeof_fmt
+from utils.progress import progresslist
+from utils.tests import index_test, genload_test
 
 loop_iters = []
 
-def print_progress(filename, filesize, filecount, totalcount, amtleft, eta, starttime):
-    # [====>    ] 50% complete | compressing file test/test.txt (1/2 files, 110MiB left)
+
+def print_progress(name, size, filecount, totalcount, amtleft, eta, starttime):
     progress = int(round((filecount / totalcount) * 100))
-    string = f'{progresslist[progress]} | compressing file {filename} ({sizeof_fmt(filesize)}) | {filecount}/{totalcount}, {sizeof_fmt(amtleft)} left, time: {hrtime(eta)}/{hrtime((perf_counter()-starttime)*1000)}                                                '
+    string = f'{progresslist[progress]} | compressing file {name} ({sizeof_fmt(size)}) | {filecount}/{totalcount}, {sizeof_fmt(amtleft)}left, time: {hrtime(eta)}/{hrtime((perf_counter()-starttime)*1000)}                                                '
     print(string, end='\r')
+
 
 def compress_folder(ofname, source_dir):
     loop_iters = []
@@ -34,7 +31,8 @@ def compress_folder(ofname, source_dir):
             file_path = os.path.join(root, filename)
             filecount += 1
             filesize += os.path.getsize(file_path)
-            print(f'{filecount} files ({sizeof_fmt(filesize)}), current file {file_path}                        ', end='\r')
+            print(
+                f'{filecount} files ({sizeof_fmt(filesize)}), current file {file_path}                        ', end='\r')
     print(f'{filecount} files ({sizeof_fmt(filesize)}), current file {file_path}                        ')
     print('Compressing all files                                                                                                                                                   ')
     tfcount = filecount
@@ -46,16 +44,19 @@ def compress_folder(ofname, source_dir):
                 start = perf_counter()
                 file_path = os.path.join(root, filename)
                 if len(loop_iters) != 0:
-                    eta = (sum(loop_iters) / len(loop_iters)) * (tfcount - filecount)
+                    eta = (sum(loop_iters) / len(loop_iters)) * \
+                        (tfcount - filecount)
                 else:
                     eta = False
-                print_progress(file_path, os.path.getsize(file_path), filecount, tfcount, filesize, eta * 1000, compstart)
+                print_progress(file_path, os.path.getsize(
+                    file_path), filecount, tfcount, filesize, eta * 1000, compstart)
                 tar.add(file_path)
                 end = perf_counter()
                 loop_iters.append(end - start)
                 filecount += 1
                 filesize -= os.path.getsize(file_path)
     print('All files compressed                                                                                                                                   ')
+
 
 def run_tests():
     print('Running tests:')
@@ -68,6 +69,7 @@ def run_tests():
     print('All tests passed')
     return True
 
+
 def generate_keyfile(count, encrypt=False):
     keys = []
     with open('keyfile', 'w') as f:
@@ -75,9 +77,10 @@ def generate_keyfile(count, encrypt=False):
             key = generate_master_key()[0]
             keys.append(key)
             f.write(key)
-            if i != count-1:
+            if i != count - 1:
                 f.write('\n')
     return keys
+
 
 def read_key(index):
     with open('keyfile') as f:
@@ -86,37 +89,17 @@ def read_key(index):
         bk = bk.split('.')
         return base64.b64decode(bk[2])
 
+
 def read_master_key():
     with open('masterkey') as f:
         data = f.read()
         bk = data.split('.')
         return base64.b64decode(bk[2])
 
-class AESCipher(object):
-    def __init__(self, key):
-        self.bs = AES.block_size
-        self.key = key
-    
-    def encrypt(self, raw):
-        raw = pad(raw, AES.block_size)
-        iv = Random.new().read(AES.block_size)
-        cipher = AES.new(self.key, AES.MODE_CBC, iv)
-        return iv + cipher.encrypt(raw)
-    
-    def decrypt(self, enc):
-        iv = enc[:AES.block_size]
-        cipher = AES.new(self.key, AES.MODE_CBC, iv)
-        return unpad(cipher.decrypt(enc[AES.block_size:]), AES.block_size)
-    
-    def _pad(self, s):
-        return s + (self.bs - len(s) % self.bs) * bytes(self.bs - len(s) % self.bs)
-
-    @staticmethod
-    def _unpad(s):
-        return s[:-ord(s[len(s)-1:])]
 
 def readchunk(f, chunksize):
     return f.read(chunksize)
+
 
 class Chunk:
     def __init__(self, index, originalsize, encryptedsize, filename, hashhex):
@@ -125,24 +108,25 @@ class Chunk:
         self.encryptedsize = encryptedsize
         self.filename = filename
         self.hashhex = hashhex
-    
+
     def __repr__(self):
         return f'chunk {self.index} {self.filename} size {self.originalsize}/{self.encryptedsize}, checksum {self.hashhex}'
-    
+
     def get_chunkdlist(self):
         return f'{self.index}:{self.filename}:{self.originalsize}/{self.encryptedsize - self.originalsize}:{self.hashhex}'
+
 
 class ChunkDataListing:
     def __init__(self, version):
         self.version = version
         self.list = []
-    
+
     def append(self, chunk):
         self.list.append(chunk)
-    
+
     def get_list(self):
         return self.list
-    
+
     def get_dlist(self):
         string = ''
         for chunk in self.list:
@@ -150,11 +134,14 @@ class ChunkDataListing:
         string = string[:-1]
         return string
 
+
 chunkdata = ChunkDataListing(1)
+
 
 def print_chunkdata():
     for chunk in chunkdata.get_list():
         print(chunk)
+
 
 def encrypt_folder(folder, filename):
     print('Encrypting folder test/ for transfer')
@@ -167,7 +154,7 @@ def encrypt_folder(folder, filename):
     keycount = calculate_keys_needed(f'{filename}.tar.xz', chunksize)
     print(keycount, 'keys need to be generated')
     print('Generating keyfile')
-    keys = generate_keyfile(keycount)
+    generate_keyfile(keycount)
     print('Encrypting file')
     tarf = tarfile.open(f'{filename}.enc.tar', 'w:xz')
     with open(f'{filename}.tar.xz', 'rb') as f:
@@ -189,10 +176,12 @@ def encrypt_folder(folder, filename):
                 f.write(encrypted)
             tarf.add(f'{filename}-chunkid{i}encd.eadc')
             print('- Writing chunk data to header, please wait', end='\r')
-            chunkid = Chunk(i, len(chunk), len(encrypted), f'{filename}-chunkid{i}encd.eadc', hash_file(f'{filename}-chunkid{i}encd.eadc', DIGEST_HEX))
+            chunkid = Chunk(i, len(chunk), len(
+                encrypted), f'{filename}-chunkid{i}encd.eadc', hash_file(f'{filename}-chunkid{i}encd.eadc', DIGEST_HEX))
             chunkdata.append(chunkid)
             os.unlink(f'{filename}-chunkid{i}encd.eadc')
-            print(f'- Encrypted chunk successfully (chunksize {len(chunk)} encsize {len(encrypted)})')
+            print(
+                f'- Encrypted chunk successfully (chunksize {len(chunk)} encsize {len(encrypted)})')
             i += 1
     os.unlink(f'{filename}.tar.xz')
     print('Encrypting keyfile')
@@ -242,7 +231,9 @@ def encrypt_folder(folder, filename):
     os.unlink('archdscrptr')
     os.unlink('keyfile')
 
+
 def decrypt_folder(archive, output):
     pass
+
 
 encrypt_folder('test', 'test')

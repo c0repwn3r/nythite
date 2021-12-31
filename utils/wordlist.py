@@ -1,10 +1,12 @@
 import random
 
+
 def load_wordlist():
     cl = []
     with open('wordlist.txt') as f:
         cl = f.read().split('\n')
     return cl
+
 
 def generate_wordlist():
     initialwordlist = []
