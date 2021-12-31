@@ -1,39 +1,12 @@
-from Crypto.Cipher import AES
-from Crypto import Random
-from Crypto.Util.Padding import pad, unpad
 import argparse
 import base64
 from pbkdf2 import PBKDF2
 import re
 import binascii
 import hashlib
-
-class AESCipher(object):
-    def __init__(self, key):
-        self.bs = AES.block_size
-        self.key = key
-    
-    def encrypt(self, raw, iv=Random.new().read(AES.block_size)):
-        raw = pad(raw, AES.block_size)
-        cipher = AES.new(self.key, AES.MODE_CBC, iv)
-        return iv + cipher.encrypt(raw)
-    
-    def decrypt(self, enc):
-        iv = enc[:AES.block_size]
-        cipher = AES.new(self.key, AES.MODE_CBC, iv)
-        return unpad(cipher.decrypt(enc[AES.block_size:]), AES.block_size)
-    
-    def decryptiv(self, enc):
-        iv = enc[:AES.block_size]
-        cipher = AES.new(self.key, AES.MODE_CBC, iv)
-        return (unpad(cipher.decrypt(enc[AES.block_size:]), AES.block_size), iv)
-    
-    def _pad(self, s):
-        return s + (self.bs - len(s) % self.bs) * bytes(self.bs - len(s) % self.bs)
-
-    @staticmethod
-    def _unpad(s):
-        return s[:-ord(s[len(s)-1:])]
+import secrets
+from genzshcomp import CompletionGenerator
+from cryptotools import AESCipher
 
 def load_wordlist():
     cl = []
@@ -119,7 +92,6 @@ parser.add_argument('-D', '--dump-key-info', type=str, help='Specify a key in an
 parser.add_argument('-g', '--gen-key', type=str, help='Generate a key of the type provided')
 parser.add_argument('-o', '--output', type=str, help='Set output file for encrypt/decrypt operations.')
 args = parser.parse_args()
-
 
 
 keytype = None
@@ -235,6 +207,59 @@ def read_master_key():
         bk = data.split('.')
         return base64.b64decode(bk[2])
 
+def get_salt():
+    # get 2 random 16-bit numbers
+    s0 = secrets.randbelow(32767)
+    s1 = secrets.randbelow(32767)
+    # combine to int
+    salt = (s0 << 16) + s1
+    # get salt text
+    wordlist = load_wordlist()
+    salt_text = wordlist[s0] + ' ' + wordlist[s1]
+    del wordlist
+    return (salt, salt_text)
+
+def get_iv():
+    # get 8 random 16-bit numbers
+    s0 = secrets.randbelow(32767)
+    s1 = secrets.randbelow(32767)
+    s2 = secrets.randbelow(32767)
+    s3 = secrets.randbelow(32767)
+    s4 = secrets.randbelow(32767)
+    s5 = secrets.randbelow(32767)
+    s6 = secrets.randbelow(32767)
+    s7 = secrets.randbelow(32767)
+
+    i0 = (s0 << 16) + s1
+    i1 = (s2 << 16) + s3
+    i2 = (s4 << 16) + s5
+    i3 = (s6 << 16) + s7
+
+    l0 = (i0 << 32) + i1
+    l1 = (i2 << 32) + i3
+
+    iv = (l0 << 64) + l1
+    # get iv_text
+    wordlist = load_wordlist()
+    iv_text = wordlist[s0] + ' ' + wordlist[s1] + ' ' + wordlist[s2] + ' ' + wordlist[s3] + ' ' + wordlist[s4] + ' ' + wordlist[s5] + ' ' + wordlist[s6] + ' ' + wordlist[s7]
+
+    return (iv, iv_text)
+
+def get_key(salt):
+    useless, key_passphrase = get_iv()
+    key = PBKDF2(key_passphrase, str(salt)).read(32)
+
+    return (key, key_passphrase)
+
+def generate_master_key():
+    salt, salt_text = get_salt()
+    iv, iv_text = get_iv()
+    key, key_text = get_key(salt)
+    brkey = f'{salt}.{iv}.{base64.b64encode(key).decode()}'
+    mkeytext = f'{salt_text} {iv_text} {key_text}'
+    return (brkey, mkeytext)
+
+
 if (action == ACTION_DECRYPT_FILE):
     if keytype == KEY_TYPE_STRING:
         print('Converting key to machine-readable format')
@@ -262,4 +287,16 @@ if (action == ACTION_DECRYPT_FILE):
             f.write(decrypted)
     print('- Decrypted file successfully        ')
     exit()
-    
+
+if (action == ACTION_GENERATE_KEY):
+    keytype = args.gen_key.lower()
+    if keytype in ['string', 'master', 'human-readable']:
+        raw, result = generate_master_key()
+        print(result)
+    elif keytype in ['xkcl', 'xkcl-b64', 'machine-readable']:
+        raw, result = generate_master_key()
+        print(raw)
+    else:
+        raw, result = generate_master_key()
+        print(raw)
+        print(result)

@@ -1,163 +1,25 @@
 import tarfile
 import os
-import hashlib
-from itertools import accumulate
-from bisect import bisect
-from random import randrange, shuffle, choice
-import random
-from unicodedata import name as unicode_name
-import keyboard
-import secrets
 import base64
-from pbkdf2 import PBKDF2
-from emoji import *
 import progressbar
 import math
-from Crypto.Cipher import AES
-from Crypto import Random
-from Crypto.Util.Padding import pad, unpad
+
+from engine.aes import AESCipher
+from engine.hashing import hash_file, DIGEST_BINARY, DIGEST_HEX
+from engine.keys import *
+
+from utils.progress import progresslist
+from utils.formatting import hrtime, sizeof_fmt
+from utils.wordlist import load_wordlist
+
 from time import sleep, perf_counter
 
-def sizeof_fmt(num, suffix="B"):
-    for unit in ["", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei", "Zi"]:
-        if abs(num) < 1024.0:
-            return f"{num:3.1f}{unit}{suffix}"
-        num /= 1024.0
-    return f"{num:.1f}Yi{suffix}"
-
-# [>         ] 10% complete
-
-DIGEST_HEX = 0
-DIGEST_BINARY = 1
-
-def hash_file(filename, digesttype=DIGEST_BINARY):
-    with open(filename, 'rb') as f:
-        hs = hashlib.sha512(f.read())
-        if digesttype == DIGEST_BINARY:
-            return hs.digest()
-        else:
-            return hs.hexdigest()
-
-progressthing = [
-    '[          ] 0% complete',
-    '[          ] 1% complete',
-    '[          ] 2% complete',
-    '[          ] 3% complete',
-    '[          ] 4% complete',
-    '[          ] 5% complete',
-    '[          ] 6% complete',
-    '[          ] 7% complete',
-    '[          ] 8% complete',
-    '[          ] 9% complete',
-    '[>         ] 10% complete',
-    '[>         ] 11% complete',
-    '[>         ] 12% complete',
-    '[>         ] 13% complete',
-    '[>         ] 14% complete',
-    '[>         ] 15% complete',
-    '[>         ] 16% complete',
-    '[>         ] 17% complete',
-    '[>         ] 18% complete',
-    '[>         ] 19% complete',
-    '[=>        ] 20% complete',
-    '[=>        ] 21% complete',
-    '[=>        ] 22% complete',
-    '[=>        ] 23% complete',
-    '[=>        ] 24% complete',
-    '[=>        ] 25% complete',
-    '[=>        ] 26% complete',
-    '[=>        ] 27% complete',
-    '[=>        ] 28% complete',
-    '[=>        ] 29% complete',
-    '[==>       ] 31% complete',
-    '[==>       ] 32% complete',
-    '[==>       ] 33% complete',
-    '[==>       ] 34% complete',
-    '[==>       ] 35% complete',
-    '[==>       ] 36% complete',
-    '[==>       ] 37% complete',
-    '[==>       ] 38% complete',
-    '[==>       ] 39% complete',
-    '[===>      ] 40% complete',
-    '[===>      ] 41% complete',
-    '[===>      ] 42% complete',
-    '[===>      ] 43% complete',
-    '[===>      ] 44% complete',
-    '[===>      ] 45% complete',
-    '[===>      ] 46% complete',
-    '[===>      ] 47% complete',
-    '[===>      ] 48% complete',
-    '[===>      ] 49% complete',
-    '[====>     ] 50% complete',
-    '[====>     ] 51% complete',
-    '[====>     ] 52% complete',
-    '[====>     ] 53% complete',
-    '[====>     ] 54% complete',
-    '[====>     ] 55% complete',
-    '[====>     ] 56% complete',
-    '[====>     ] 57% complete',
-    '[====>     ] 58% complete',
-    '[====>     ] 59% complete',
-    '[=====>    ] 60% complete',
-    '[=====>    ] 61% complete',
-    '[=====>    ] 62% complete',
-    '[=====>    ] 63% complete',
-    '[=====>    ] 64% complete',
-    '[=====>    ] 65% complete',
-    '[=====>    ] 66% complete',
-    '[=====>    ] 67% complete',
-    '[=====>    ] 68% complete',
-    '[=====>    ] 69% complete',
-    '[======>   ] 70% complete',
-    '[======>   ] 71% complete',
-    '[======>   ] 72% complete',
-    '[======>   ] 73% complete',
-    '[======>   ] 74% complete',
-    '[======>   ] 75% complete',
-    '[======>   ] 76% complete',
-    '[======>   ] 77% complete',
-    '[======>   ] 78% complete',
-    '[======>   ] 79% complete',
-    '[=======>  ] 80% complete',
-    '[=======>  ] 81% complete',
-    '[=======>  ] 82% complete',
-    '[=======>  ] 83% complete',
-    '[=======>  ] 84% complete',
-    '[=======>  ] 85% complete',
-    '[=======>  ] 86% complete',
-    '[=======>  ] 87% complete',
-    '[=======>  ] 88% complete',
-    '[=======>  ] 89% complete',
-    '[========> ] 90% complete',
-    '[========> ] 91% complete',
-    '[========> ] 92% complete',
-    '[========> ] 93% complete',
-    '[========> ] 94% complete',
-    '[========> ] 95% complete',
-    '[========> ] 96% complete',
-    '[========> ] 97% complete',
-    '[========> ] 98% complete',
-    '[========> ] 99% complete',
-    '[=========>] 100% complete',
-]
-
 loop_iters = []
-
-def hrtime(ms):
-    if ms == False:
-        return 'Calculating...'
-    seconds=(ms/1000)%60
-    seconds = int(seconds)
-    minutes=(ms/(1000*60))%60
-    minutes = int(minutes)
-    hours = (ms/(1000*60*60))%24
-    hours = int(hours)
-    return f'{str(hours).zfill(2)}:{str(minutes).zfill(2)}:{str(seconds).zfill(2)}'
 
 def print_progress(filename, filesize, filecount, totalcount, amtleft, eta, starttime):
     # [====>    ] 50% complete | compressing file test/test.txt (1/2 files, 110MiB left)
     progress = int(round((filecount / totalcount) * 100))
-    string = f'{progressthing[progress]} | compressing file {filename} ({sizeof_fmt(filesize)}) | {filecount}/{totalcount}, {sizeof_fmt(amtleft)} left, time: {hrtime(eta)}/{hrtime((perf_counter()-starttime)*1000)}                                                '
+    string = f'{progresslist[progress]} | compressing file {filename} ({sizeof_fmt(filesize)}) | {filecount}/{totalcount}, {sizeof_fmt(amtleft)} left, time: {hrtime(eta)}/{hrtime((perf_counter()-starttime)*1000)}                                                '
     print(string, end='\r')
 
 def compress_folder(ofname, source_dir):
@@ -193,150 +55,6 @@ def compress_folder(ofname, source_dir):
                 filecount += 1
                 filesize -= os.path.getsize(file_path)
     print('All files compressed                                                                                                                                   ')
-
-def load_wordlist():
-    cl = []
-    with open('wordlist.txt') as f:
-        cl = f.read().split('\n')
-    return cl
-
-def get_salt():
-    # get 2 random 16-bit numbers
-    s0 = secrets.randbelow(32767)
-    s1 = secrets.randbelow(32767)
-    # combine to int
-    salt = (s0 << 16) + s1
-    # get salt text
-    wordlist = load_wordlist()
-    salt_text = wordlist[s0] + ' ' + wordlist[s1]
-    del wordlist
-    return (salt, salt_text)
-
-def load_salt(salt_text):
-    wordlist = load_wordlist()
-
-    salt_text = salt_text.split()
-
-    # salt is 2 words (32 bit int)
-    s0 = wordlist.index(salt_text[0])
-    s1 = wordlist.index(salt_text[1])
-
-    del wordlist
-
-    # combine short to int
-    return (s0 << 16) + s1
-
-def get_iv():
-    # get 8 random 16-bit numbers
-    s0 = secrets.randbelow(32767)
-    s1 = secrets.randbelow(32767)
-    s2 = secrets.randbelow(32767)
-    s3 = secrets.randbelow(32767)
-    s4 = secrets.randbelow(32767)
-    s5 = secrets.randbelow(32767)
-    s6 = secrets.randbelow(32767)
-    s7 = secrets.randbelow(32767)
-
-    i0 = (s0 << 16) + s1
-    i1 = (s2 << 16) + s3
-    i2 = (s4 << 16) + s5
-    i3 = (s6 << 16) + s7
-
-    l0 = (i0 << 32) + i1
-    l1 = (i2 << 32) + i3
-
-    iv = (l0 << 64) + l1
-    # get iv_text
-    wordlist = load_wordlist()
-    iv_text = wordlist[s0] + ' ' + wordlist[s1] + ' ' + wordlist[s2] + ' ' + wordlist[s3] + ' ' + wordlist[s4] + ' ' + wordlist[s5] + ' ' + wordlist[s6] + ' ' + wordlist[s7]
-
-    return (iv, iv_text)
-
-def load_iv(iv_text):
-    wordlist = load_wordlist()
-
-    iv_text = iv_text.split()
-
-    # iv is 8 words (128 bit)
-    s0 = wordlist.index(iv_text[0])
-    s1 = wordlist.index(iv_text[1])
-    s2 = wordlist.index(iv_text[2])
-    s3 = wordlist.index(iv_text[3])
-    s4 = wordlist.index(iv_text[4])
-    s5 = wordlist.index(iv_text[5])
-    s6 = wordlist.index(iv_text[6])
-    s7 = wordlist.index(iv_text[7])
-
-    i0 = (s0 << 16) + s1
-    i1 = (s2 << 16) + s3
-    i2 = (s4 << 16) + s5
-    i3 = (s6 << 16) + s7
-
-    l0 = (i0 << 32) + i1
-    l1 = (i2 << 32) + i3
-
-    iv = (l0 << 64) + l1
-
-    return iv
-
-def get_key(salt):
-    useless, key_passphrase = get_iv()
-    key = PBKDF2(key_passphrase, str(salt)).read(32)
-
-    return (key, key_passphrase)
-
-def load_key(salt, key_passphrase):
-    key = PBKDF2(key_passphrase, str(salt)).read(32)
-
-    return base64.b64encode(key).decode()
-
-def generate_master_key():
-    salt, salt_text = get_salt()
-    iv, iv_text = get_iv()
-    key, key_text = get_key(salt)
-    brkey = f'{salt}.{iv}.{base64.b64encode(key).decode()}'
-    mkeytext = f'{salt_text} {iv_text} {key_text}'
-    return (brkey, mkeytext)
-
-def index_test():
-    print('Running 32k indexing test')
-    wordlist = load_wordlist()
-    for i in progressbar.progressbar(range(32767)):
-        word = wordlist[i]
-        if wordlist.index(word) != i:
-            print(wordlist.index(word))
-            print('Index test failed on', i)
-            return False
-    return True
-
-def genload_test():
-    print('Running genload test')
-    for i in progressbar.progressbar(range(500)):
-        brkey, mkeytext = generate_master_key()
-        brkey = brkey.split('.')
-        salt = int(brkey[0])
-        iv = int(brkey[1])
-        key = brkey[2]
-        mkeytext = mkeytext.split()
-        salt_text = ' '.join(mkeytext[:2])
-        iv_text = ' '.join(mkeytext[2:10])
-        key_text = ' '.join(mkeytext[10:])
-        salt_test = load_salt(salt_text)
-        if salt_test != salt:
-            print(f'{i} | testing salt FAILED!')
-            print(salt_test, salt, salt_text)
-            return False
-        iv_test = load_iv(iv_text)
-        if iv_test != iv:
-            print(f'{i} | testing iv FAILED!')
-            print(iv_test, iv_text, iv)
-            return False
-        key_test = load_key(salt, key_text)
-        if key_test != key:
-            print(f'{i} | testing key FAILED!')
-            print(key_test, key_text, salt, key)
-            return False
-    return True
 
 def run_tests():
     print('Running tests:')
@@ -550,5 +268,8 @@ def encrypt_folder(folder, filename):
     os.unlink('archdscrptr.eadf')
     os.unlink('archdscrptr')
     os.unlink('keyfile')
+
+def decrypt_folder(archive, output):
+    pass
 
 encrypt_folder('test', 'test')
