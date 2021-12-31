@@ -1,6 +1,6 @@
 from utils.wordlist import load_wordlist
 import secrets
-from pbkdf2 import PBKDF2
+from engine.pbkdf2 import PBKDF2
 import base64
 
 
