@@ -1,3 +1,7 @@
+from utils.formatting import sizeof_fmt, hrtime
+
+from time import perf_counter
+
 progresslist = [
     '[          ] 0% complete',
     '[          ] 1% complete',
@@ -100,3 +104,18 @@ progresslist = [
     '[========> ] 99% complete',
     '[=========>] 100% complete',
 ]
+
+
+def print_progress(name, size, filecount, totalcount, amtleft, eta, starttime):
+    progress = int(round((filecount / totalcount) * 100))
+    try:
+        string = f'{progresslist[progress]} | compressing file {name} ({sizeof_fmt(size)}) | {filecount}/{totalcount}, {sizeof_fmt(amtleft)}left, time: {hrtime(eta)}/{hrtime((perf_counter()-starttime)*1000)}                                                '
+    except IndexError:
+        string = f'{progresslist[-1]} | compressing file {name} ({sizeof_fmt(size)}) | {filecount}/{totalcount}, {sizeof_fmt(amtleft)}left, time: {hrtime(eta)}/{hrtime((perf_counter()-starttime)*1000)}                                                '
+    print(string, end='\r')
+
+
+def on_progress(name, position, size):
+    progress = int(round((position / size) * 100))
+    string = f'{progresslist[progress]} | compressing file {name}'
+    print(string, end='\r')

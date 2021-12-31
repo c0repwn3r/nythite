@@ -54,7 +54,9 @@ def get_iv():
     iv = (l0 << 64) + l1
     # get iv_text
     wordlist = load_wordlist()
-    iv_text = wordlist[s0] + ' ' + wordlist[s1] + ' ' + wordlist[s2] + ' ' + wordlist[s3] + ' ' + wordlist[s4] + ' ' + wordlist[s5] + ' ' + wordlist[s6] + ' ' + wordlist[s7]
+    iv_text = wordlist[s0] + ' ' + wordlist[s1] + ' ' + wordlist[s2] + ' ' + wordlist[s3] + \
+        ' ' + wordlist[s4] + ' ' + wordlist[s5] + \
+        ' ' + wordlist[s6] + ' ' + wordlist[s7]
 
     return (iv, iv_text)
 
@@ -120,3 +122,30 @@ def convert_key(key):
     key = load_key(salt, key_text)
     xkcl = f'{salt}.{iv}.{key}'
     return xkcl
+
+
+def generate_keyfile(count, encrypt=False):
+    keys = []
+    with open('keyfile', 'w') as f:
+        for i in range(count):
+            key = generate_master_key()[0]
+            keys.append(key)
+            f.write(key)
+            if i != count - 1:
+                f.write('\n')
+    return keys
+
+
+def read_key(index):
+    with open('keyfile') as f:
+        data = f.read().split('\n')
+        bk = data[index]
+        bk = bk.split('.')
+        return base64.b64decode(bk[2])
+
+
+def read_master_key():
+    with open('masterkey') as f:
+        data = f.read()
+        bk = data.split('.')
+        return base64.b64decode(bk[2])
