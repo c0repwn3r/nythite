@@ -1,4 +1,4 @@
-from wordlist import load_wordlist
+from utils.wordlist import load_wordlist
 
 def index_test():
     print('Running 32k indexing test')
