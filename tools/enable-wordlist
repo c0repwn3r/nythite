@@ -2,4 +2,6 @@
 echo '1: Disable current wordlist'
 unlink wordlists/current.txt
 echo '2: Enable new wordlist'
-ln -s wordlists/$1.txt wordlists/current.txt
+cd wordlists
+ln -s $1.txt current.txt
+cd ../

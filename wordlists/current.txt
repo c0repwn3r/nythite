@@ -1,1 +1,1 @@
-wordlists/default.txt
+default.txt
