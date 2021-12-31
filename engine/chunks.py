@@ -1,3 +1,7 @@
+import os
+import math
+
+
 class Chunk:
     def __init__(self, index, originalsize, encryptedsize, filename, hashhex):
         self.index = index
@@ -66,3 +70,24 @@ def parse_dlist(dlist):
 def print_chunkdata(chunkdata):
     for chunk in chunkdata.get_list():
         print(chunk)
+
+
+def get_chunk_size(file):
+    CHUNK_MINIMUM = 4096
+    CHUNK_MAXIMUM = 512000000
+    CHUNK_DIVISOR = 8
+
+    filesize = os.path.getsize(file)
+    chunksize = filesize / CHUNK_DIVISOR
+    if chunksize < CHUNK_MINIMUM:
+        chunksize = CHUNK_MINIMUM
+    elif chunksize > CHUNK_MAXIMUM:
+        chunksize = CHUNK_MAXIMUM
+
+    return round(chunksize)
+
+
+def calculate_keys_needed(file, chunksize):
+    filesize = os.path.getsize(file)
+    chunksneeded = int(math.ceil(filesize / chunksize))
+    return chunksneeded

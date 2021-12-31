@@ -1,5 +1,5 @@
 from engine.operations import encrypt_folder, decrypt_folder
-from engine.tests import index_test, genload_test
+from utils.tests import index_test, genload_test
 
 loop_iters = []
 
