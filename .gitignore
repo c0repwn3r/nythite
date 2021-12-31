@@ -1,3 +1,10 @@
+# Caches
+engine/__pycache__
+utils/__pycache__
 __pycache__
-test
+
+# Generated files
+test.tar.xz
 test.enc.tar
+test/
+test-decrypted/
