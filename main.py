@@ -1,20 +1,19 @@
-import tarfile
-import os
 import base64
-import progressbar
 import math
+import os
+import tarfile
+from time import perf_counter, sleep
+
+import progressbar
 
 from engine.cipher import *
+from engine.files import *
 from engine.hashing import *
 from engine.keys import *
-from engine.files import *
-
 from utils.formatting import *
 from utils.progress import *
 from utils.tests import *
 from utils.wordlist import *
-
-from time import sleep, perf_counter
 
 loop_iters = []
 
