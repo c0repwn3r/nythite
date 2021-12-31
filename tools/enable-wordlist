@@ -1,0 +1,5 @@
+#!/bin/bash
+echo '1: Disable current wordlist'
+unlink wordlists/current.txt
+echo '2: Enable new wordlist'
+ln -s wordlists/$1.txt wordlists/current.txt
