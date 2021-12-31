@@ -1,17 +1,10 @@
 import argparse
 import base64
-from pbkdf2 import PBKDF2
 import binascii
-import hashlib
-import secrets
-from cryptotools import AESCipher
 
-
-def load_wordlist():
-    cl = []
-    with open('wordlist.txt') as f:
-        cl = f.read().split('\n')
-    return cl
+from engine.cipher import AESCipher
+from engine.hashing import sha512_file
+from engine.keys import generate_master_key, convert_key, load_salt, load_iv, load_key
 
 
 KEY_TYPE_STRING = 0
@@ -22,68 +15,6 @@ ACTION_ENCRYPT_FILE = 3
 ACTION_CONVERT_KEY = 4
 ACTION_DUMP_KEY_INFO = 5
 ACTION_GENERATE_KEY = 6
-
-
-def load_salt(salt_text):
-    wordlist = load_wordlist()
-
-    salt_text = salt_text.split()
-
-    # salt is 2 words (32 bit int)
-    s0 = wordlist.index(salt_text[0])
-    s1 = wordlist.index(salt_text[1])
-
-    del wordlist
-
-    # combine short to int
-    return (s0 << 16) + s1
-
-
-def load_iv(iv_text):
-    wordlist = load_wordlist()
-
-    iv_text = iv_text.split()
-
-    # iv is 8 words (128 bit)
-    s0 = wordlist.index(iv_text[0])
-    s1 = wordlist.index(iv_text[1])
-    s2 = wordlist.index(iv_text[2])
-    s3 = wordlist.index(iv_text[3])
-    s4 = wordlist.index(iv_text[4])
-    s5 = wordlist.index(iv_text[5])
-    s6 = wordlist.index(iv_text[6])
-    s7 = wordlist.index(iv_text[7])
-
-    i0 = (s0 << 16) + s1
-    i1 = (s2 << 16) + s3
-    i2 = (s4 << 16) + s5
-    i3 = (s6 << 16) + s7
-
-    l0 = (i0 << 32) + i1
-    l1 = (i2 << 32) + i3
-
-    iv = (l0 << 64) + l1
-
-    return iv
-
-
-def load_key(salt, key_passphrase):
-    key = PBKDF2(key_passphrase, str(salt)).read(32)
-
-    return base64.b64encode(key).decode()
-
-
-def convert_key(key):
-    # load the key manually then generate an xkcl-b64 key
-    mkeytext = key.split(' ')
-    salt_text = ' '.join(mkeytext[:2])
-    iv_text = ' '.join(mkeytext[2:10])
-    key_text = ' '.join(mkeytext[10:])
-    salt = load_salt(salt_text)
-    iv = load_iv(iv_text)
-    key = load_key(salt, key_text)
-    xkcl = f'{salt}.{iv}.{key}'
-    return xkcl
 
 
 parser = argparse.ArgumentParser(
@@ -164,11 +95,6 @@ if (args.convert_key):
     exit()
 
 
-def sha512_file(filepath):
-    with open(filepath, 'rb') as f:
-        return hashlib.sha512(f.read()).hexdigest()
-
-
 numbers = list('0123456789')
 letters = list('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ')
 base64c = list(
@@ -219,71 +145,6 @@ if (args.dump_key_info):
         print(f'xkcl-b64 conversion: {convert_key(mkey)}')
         print(f'installed wordlist version: {sha512_file("wordlist.txt")}')
         exit()
-
-
-def read_master_key():
-    with open('masterkey') as f:
-        data = f.read()
-        bk = data.split('.')
-        return base64.b64decode(bk[2])
-
-
-def get_salt():
-    # get 2 random 16-bit numbers
-    s0 = secrets.randbelow(32767)
-    s1 = secrets.randbelow(32767)
-    # combine to int
-    salt = (s0 << 16) + s1
-    # get salt text
-    wordlist = load_wordlist()
-    salt_text = wordlist[s0] + ' ' + wordlist[s1]
-    del wordlist
-    return (salt, salt_text)
-
-
-def get_iv():
-    # get 8 random 16-bit numbers
-    s0 = secrets.randbelow(32767)
-    s1 = secrets.randbelow(32767)
-    s2 = secrets.randbelow(32767)
-    s3 = secrets.randbelow(32767)
-    s4 = secrets.randbelow(32767)
-    s5 = secrets.randbelow(32767)
-    s6 = secrets.randbelow(32767)
-    s7 = secrets.randbelow(32767)
-
-    i0 = (s0 << 16) + s1
-    i1 = (s2 << 16) + s3
-    i2 = (s4 << 16) + s5
-    i3 = (s6 << 16) + s7
-
-    l0 = (i0 << 32) + i1
-    l1 = (i2 << 32) + i3
-
-    iv = (l0 << 64) + l1
-    # get iv_text
-    wordlist = load_wordlist()
-    iv_text = wordlist[s0] + ' ' + wordlist[s1] + ' ' + wordlist[s2] + ' ' + wordlist[s3] + \
-        ' ' + wordlist[s4] + ' ' + wordlist[s5] + \
-        ' ' + wordlist[s6] + ' ' + wordlist[s7]
-
-    return (iv, iv_text)
-
-
-def get_key(salt):
-    useless, key_passphrase = get_iv()
-    key = PBKDF2(key_passphrase, str(salt)).read(32)
-
-    return (key, key_passphrase)
-
-
-def generate_master_key():
-    salt, salt_text = get_salt()
-    iv, iv_text = get_iv()
-    key, key_text = get_key(salt)
-    brkey = f'{salt}.{iv}.{base64.b64encode(key).decode()}'
-    mkeytext = f'{salt_text} {iv_text} {key_text}'
-    return (brkey, mkeytext)
 
 
 if (action == ACTION_DECRYPT_FILE):

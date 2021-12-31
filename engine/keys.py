@@ -3,6 +3,7 @@ import secrets
 from pbkdf2 import PBKDF2
 import base64
 
+
 def get_salt():
     # get 2 random 16-bit numbers
     s0 = secrets.randbelow(32767)
@@ -14,6 +15,7 @@ def get_salt():
     salt_text = wordlist[s0] + ' ' + wordlist[s1]
     del wordlist
     return (salt, salt_text)
+
 
 def load_salt(salt_text):
     wordlist = load_wordlist()
@@ -28,6 +30,7 @@ def load_salt(salt_text):
 
     # combine short to int
     return (s0 << 16) + s1
+
 
 def get_iv():
     # get 8 random 16-bit numbers
@@ -54,6 +57,7 @@ def get_iv():
     iv_text = wordlist[s0] + ' ' + wordlist[s1] + ' ' + wordlist[s2] + ' ' + wordlist[s3] + ' ' + wordlist[s4] + ' ' + wordlist[s5] + ' ' + wordlist[s6] + ' ' + wordlist[s7]
 
     return (iv, iv_text)
+
 
 def load_iv(iv_text):
     wordlist = load_wordlist()
@@ -82,16 +86,19 @@ def load_iv(iv_text):
 
     return iv
 
+
 def get_key(salt):
     useless, key_passphrase = get_iv()
     key = PBKDF2(key_passphrase, str(salt)).read(32)
 
     return (key, key_passphrase)
 
+
 def load_key(salt, key_passphrase):
     key = PBKDF2(key_passphrase, str(salt)).read(32)
 
     return base64.b64encode(key).decode()
+
 
 def generate_master_key():
     salt, salt_text = get_salt()
@@ -100,3 +107,16 @@ def generate_master_key():
     brkey = f'{salt}.{iv}.{base64.b64encode(key).decode()}'
     mkeytext = f'{salt_text} {iv_text} {key_text}'
     return (brkey, mkeytext)
+
+
+def convert_key(key):
+    # load the key manually then generate an xkcl-b64 key
+    mkeytext = key.split(' ')
+    salt_text = ' '.join(mkeytext[:2])
+    iv_text = ' '.join(mkeytext[2:10])
+    key_text = ' '.join(mkeytext[10:])
+    salt = load_salt(salt_text)
+    iv = load_iv(iv_text)
+    key = load_key(salt, key_text)
+    xkcl = f'{salt}.{iv}.{key}'
+    return xkcl

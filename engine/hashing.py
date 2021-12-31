@@ -11,3 +11,8 @@ def hash_file(filename, digesttype=DIGEST_BINARY):
             return hs.digest()
         else:
             return hs.hexdigest()
+
+
+def sha512_file(filepath):
+    with open(filepath, 'rb') as f:
+        return hashlib.sha512(f.read()).hexdigest()
