@@ -18,7 +18,10 @@ loop_iters = []
 
 def print_progress(name, size, filecount, totalcount, amtleft, eta, starttime):
     progress = int(round((filecount / totalcount) * 100))
-    string = f'{progresslist[progress]} | compressing file {name} ({sizeof_fmt(size)}) | {filecount}/{totalcount}, {sizeof_fmt(amtleft)}left, time: {hrtime(eta)}/{hrtime((perf_counter()-starttime)*1000)}                                                '
+    try:
+        string = f'{progresslist[progress]} | compressing file {name} ({sizeof_fmt(size)}) | {filecount}/{totalcount}, {sizeof_fmt(amtleft)}left, time: {hrtime(eta)}/{hrtime((perf_counter()-starttime)*1000)}                                                '
+    except IndexError:
+        string = f'{progresslist[-1]} | compressing file {name} ({sizeof_fmt(size)}) | {filecount}/{totalcount}, {sizeof_fmt(amtleft)}left, time: {hrtime(eta)}/{hrtime((perf_counter()-starttime)*1000)}                                                '
     print(string, end='\r')
 
 
@@ -228,7 +231,7 @@ def encrypt_folder(folder, filename):
     print('- Generating new master key                  ', end='\r')
     keydata, keytext = generate_master_key()
     print('Key txt:', keytext)
-    key = AESCipher(read_master_key())
+    key = AESCipher(base64.b64decode(keydata.split('.')[2]))
     print('- Encrypting data', end='\r')
     with open('keyfile', 'rb') as f:
         bare = f.read()
@@ -263,6 +266,7 @@ def encrypt_folder(folder, filename):
     os.unlink('archdscrptr.eadf')
     os.unlink('archdscrptr')
     os.unlink('keyfile')
+    tarf.close()
     return keytext
 
 
@@ -423,10 +427,11 @@ def decrypt_folder(archive, output, key):
     arc = tarfile.open('r:xz', fileobj=ProgressFileObject('temp.arc.tar.xz'))
     arc.extractall(output)
     arc.close()
+    os.unlink('temp.arc.tar.xz')
     print('decompressing | [=========>] 100% complete')
     print('Done')
 
 
-# encrypt_folder('test', 'test')
-decrypt_folder('test.enc.tar', 'test-decrypted',
-               '513478160.149299762612881954935622144756063088426.X1NK6yFB4v4q1Z9Bn8KiFR10j3O0Dsf+YUnyySCNXdQ=')
+encrypt_folder('test', 'test')
+key = input('Please paste your master key here')
+decrypt_folder('test.enc.tar', 'test-decrypted', key)
