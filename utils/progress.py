@@ -1,6 +1,7 @@
 from utils.formatting import sizeof_fmt, hrtime
 
 from time import perf_counter
+import sys
 
 progresslist = [
     '[          ] 0% complete',
@@ -112,10 +113,13 @@ def print_progress(name, size, filecount, totalcount, amtleft, eta, starttime):
         string = f'{progresslist[progress]} | compressing file {name} ({sizeof_fmt(size)}) | {filecount}/{totalcount}, {sizeof_fmt(amtleft)}left, time: {hrtime(eta)}/{hrtime((perf_counter()-starttime)*1000)}                                                '
     except IndexError:
         string = f'{progresslist[-1]} | compressing file {name} ({sizeof_fmt(size)}) | {filecount}/{totalcount}, {sizeof_fmt(amtleft)}left, time: {hrtime(eta)}/{hrtime((perf_counter()-starttime)*1000)}                                                '
-    print(string, end='\r')
+    string += '\r'
+    print(string.replace('\n', ''), end='')
+    sys.stdout.flush()
 
 
 def on_progress(name, position, size):
     progress = int(round((position / size) * 100))
-    string = f'{progresslist[progress]} | compressing file {name}'
-    print(string, end='\r')
+    string = f'{progresslist[progress]} | compressing file {name}\r'
+    print(string.replace('\n', ''), end='')
+    sys.stdout.flush()
