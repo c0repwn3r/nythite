@@ -14,6 +14,7 @@ def compress_folder(ofname, source_dir):
     filesize = 0
     filecount = 0
     tfcount = 0
+    file_path = None
     for root, subdirs, files in os.walk(source_dir):
         for filename in files:
             file_path = os.path.join(root, filename)
